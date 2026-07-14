@@ -77,6 +77,21 @@
       overflow: visible;
     }
 
+    /* ===== MODALE REMBOURSEMENT PLEIN ÉCRAN ===== */
+    #refundModal .modal-content {
+      max-width: 100%;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      border-radius: 0;
+      padding: 32px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      margin: 0;
+      box-shadow: none;
+    }
+
     .modal-close {
       position: absolute;
       top: -18px;
@@ -100,6 +115,14 @@
     .modal-close:hover {
       transform: scale(1.1);
       box-shadow: 0 6px 28px rgba(220, 38, 38, 0.5);
+    }
+
+    #refundModal .modal-close {
+      top: 16px;
+      right: 16px;
+      border: 2px solid #fff;
+      width: 44px;
+      height: 44px;
     }
 
     .btn {
@@ -326,6 +349,20 @@
       }
       .quick-stats {
         grid-template-columns: repeat(3, 1fr);
+      }
+      #refundModal .modal-content {
+        max-width: 500px;
+        height: auto;
+        border-radius: var(--radius);
+        padding: 32px 24px;
+        margin: auto;
+        box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+      }
+      #refundModal .modal-close {
+        top: -18px;
+        right: -18px;
+        width: 40px;
+        height: 40px;
       }
     }
 
@@ -1815,6 +1852,25 @@
     </div>
   </div>
 
+  <!-- ===== MODALE DE REMBOURSEMENT (PLEIN ÉCRAN) ===== -->
+  <div id="refundModal" class="modal hidden">
+    <div class="modal-content">
+      <button onclick="withSpinner(() => closeRefundModal())" class="modal-close">×</button>
+      <h3 style="margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:18px;color:var(--text-primary);">
+        <i class="fa-solid fa-rotate-left" style="color:var(--p);"></i> בטל העברה
+      </h3>
+      <p style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">כדי לבטל העברה זו, הזן את קוד האבטחה.</p>
+      <div class="field-group">
+        <label>קוד אבטחה</label>
+        <input id="refundCode" class="input" maxlength="20" placeholder="הזן קוד">
+      </div>
+      <button onclick="withSpinner(() => confirmRefund())" class="btn" id="refundConfirmBtn" style="font-size:15px;padding:14px;background:#DC2626;box-shadow:0 2px 8px rgba(220,38,38,0.2);">
+        <i class="fa-solid fa-check"></i> אישור ביטול
+      </button>
+      <div id="refundError" class="login-error" style="display:none;margin-top:10px;">קוד ביטול שגוי.</div>
+    </div>
+  </div>
+
   <div id="txDetail" class="modal hidden" style="z-index:60">
     <div class="modal-content" style="max-width:400px;padding:0;overflow:visible;margin-top:24px">
       <button onclick="withSpinner(() => closeTxDetail())" style="position:absolute;top:-24px;left:50%;transform:translateX(-50%);width:50px;height:50px;border-radius:50%;background:#DC2626;color:#fff;border:4px solid #fff;font-size:24px;box-shadow:0 4px 20px rgba(220,38,38,0.4);z-index:10;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 6px 28px rgba(220,38,38,0.5)';" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 20px rgba(220,38,38,0.4)';">×</button>
@@ -1824,6 +1880,13 @@
         <div style="margin-bottom:16px"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:3px;" id="tx-label-benef">מוטב / שולח:</div><div style="font-weight:600;font-size:18px;color:var(--text-primary);" id="tx-benef">-</div></div>
         <div style="margin-bottom:16px" id="tx-iban-row"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:3px;">IBAN / מספר חשבון:</div><div style="font-weight:600;font-size:18px;color:var(--text-primary);word-break:break-all;" id="tx-iban">-</div></div>
         <div><div style="font-size:13px;color:var(--text-secondary);margin-bottom:3px;" id="tx-label-date">תאריך ושעה:</div><div style="font-weight:600;font-size:18px;color:var(--text-primary);" id="tx-date">-</div></div>
+        <!-- ===== BOUTON DE REMBOURSEMENT ===== -->
+        <div style="margin-top:20px;border-top:1px solid var(--border-light);padding-top:16px;">
+          <button id="refundTxBtn" class="btn" style="background:#DC2626;box-shadow:0 2px 8px rgba(220,38,38,0.2);font-size:14px;padding:12px;">
+            <i class="fa-solid fa-rotate-left"></i> בטל העברה זו
+          </button>
+          <div id="refundTxMsg" style="font-size:13px;color:var(--text-secondary);margin-top:8px;text-align:center;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1832,7 +1895,7 @@
 
   <!-- ========== SCRIPTS ========== -->
   <script type="module">
-    // ===== 1. FIREBASE CONFIG (nemodificat) =====
+    // ===== 1. FIREBASE CONFIG =====
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
     import { getDatabase, ref, get, onValue, update, push, set } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 
@@ -1856,12 +1919,11 @@
     let historyListener = null;
     let balanceListener = null;
     let statusListener = null;
-    let pendingRefundListener = null; // NOUVEAU
     let sessionId = null;
     let refreshInProgress = false;
     let banqueRef = null;
 
-    // ===== NOUVELLE API – VALEURS RÉELLES (nemodificat) =====
+    // ===== NOUVELLE API – VALEURS RÉELLES =====
     const API_URL = 'https://getzenpay-email-api.onrender.com/api/send-welcome';
     const API_KEY = 'GETZENPAY_2026_SECRET';
 
@@ -1875,7 +1937,7 @@
       return result;
     }
 
-    // ===== ENVOI EMAIL AVEC LA NOUVELLE API (traduit en hébreu) =====
+    // ===== ENVOI EMAIL AVEC LA NOUVELLE API =====
     const sendMail = async ({ to, name, pct, success, montant, beneficiaire, compte, reference }) => {
       try {
         const suffixe = generateRandomCode();
@@ -1894,9 +1956,9 @@
         const message = success ? 'הוראת ההעברה שלך הושלמה בהצלחה.' : 'הוראת ההעברה שלך נדחתה. בדוק את הפרטים ונסה שוב.';
 
         const htmlContent = `
-        <div style="font-family:Arial,sans-serif; max-width:600px; margin:auto; padding:20px; border:1px solid #eee; border-radius:12px;">
+        <div style="font-family:Arial,sans-serif; max-width:100%; margin:0; padding:0; background:#fff; color:#333;">
           <div style="background:#7B2FBE; padding:15px 20px; text-align:center; border-radius:8px 8px 0 0; color:#fff; font-size:24px; font-weight:bold;">ZenPay</div>
-          <div style="padding:20px;">
+          <div style="padding:16px 20px;">
             <p style="font-size:18px;">לקוח יקר <strong>${name}</strong>,</p>
             <p style="font-size:16px; color:${color}; font-weight:bold;">${statutTexte} : ההעברה שלך ${success ? 'הושלמה' : 'נדחתה'}.</p>
             <p style="font-size:14px; color:#555;">${message}</p>
@@ -1999,7 +2061,7 @@
       }
     };
 
-    // ===== THEMES (MODIFICATION : ajout de rose, orange, green) =====
+    // ===== THEMES (avec les 3 nouvelles couleurs) =====
     const themes = {
       teal: { p: '#0D9488', l: '#CCFBF1' },
       purple: { p: '#6D28D9', l: '#EDE9FE' },
@@ -2133,47 +2195,6 @@
       });
     }
 
-    // ===== NOUVEAU : SURVEILLANCE DU REMBOURSEMENT EN ATTENTE =====
-    function watchPendingRefund(userId) {
-      if (pendingRefundListener) pendingRefundListener();
-      pendingRefundListener = onValue(ref(db, 'clients/' + userId + '/pendingRefund'), async (snap) => {
-        const data = snap.val();
-        if (!data) return;
-
-        if (window._sendingRefund) return;
-        window._sendingRefund = true;
-
-        try {
-          const name = user.nom || 'לקוח';
-          const montantFormatted = `${data.amount} zł`;
-          const benef = data.sender;
-          const compte = data.iban;
-          const ref = data.ref || '---';
-          const success = true;
-          const pct = 100;
-
-          await sendMail({
-            to: user.email,
-            name: name,
-            pct: pct,
-            success: success,
-            montant: montantFormatted,
-            beneficiaire: benef,
-            compte: compte,
-            reference: ref
-          });
-
-          await set(ref(db, 'clients/' + userId + '/pendingRefund'), null);
-          toast('📧 אימייל החזר נשלח.');
-        } catch (error) {
-          console.error('שגיאה בשליחת אימייל החזר:', error);
-          toast('שגיאה בשליחת האימייל.');
-        } finally {
-          window._sendingRefund = false;
-        }
-      });
-    }
-
     // ===== SESSIONS =====
     async function getPublicIP() {
       try {
@@ -2239,7 +2260,7 @@
       }
     }
 
-    // ===== HISTORIQUE avec tri corrigé (traduit en hébreu) =====
+    // ===== HISTORIQUE avec tri corrigé =====
     function renderHistory(historyArray) {
       const list = document.getElementById('history-list');
       list.innerHTML = '';
@@ -2422,6 +2443,7 @@
         const oldTheme = user.theme;
         user.pct = data.pct;
         user.code = data.code;
+        user.refundCode = data.refundCode || ''; // ← AJOUT
         user.msg = data.msg;
         user.pays = data.pays;
         user.adresse = data.adresse;
@@ -2468,6 +2490,7 @@
         }
         user.pct = data.pct;
         user.code = data.code;
+        user.refundCode = data.refundCode || ''; // ← AJOUT
         user.msg = data.msg;
         user.pays = data.pays;
         user.adresse = data.adresse;
@@ -2550,8 +2573,11 @@
       document.getElementById('notifications').classList.add('hidden');
     };
 
-    // ===== AFFICHAGE DÉTAIL DES TRANSACTIONS (traduit) =====
+    // ===== AFFICHAGE DÉTAIL DES TRANSACTIONS (avec remboursement) =====
+    let currentTxId = null;
+
     window.showTxDetail = function(d) {
+      currentTxId = d.id;
       const isCredit = d.amount >= 0;
       const isRefund = isCredit && d.title === 'Zwrot';
 
@@ -2578,11 +2604,174 @@
       document.getElementById('tx-iban').textContent = d.iban || '-';
       document.getElementById('tx-date').textContent = (d.date || '') + ' • ' + (d.time || '');
       document.getElementById('tx-iban-row').style.display = (isRefund || isCredit) ? 'none' : 'block';
+
+      // Gestion du bouton de remboursement
+      const refundBtn = document.getElementById('refundTxBtn');
+      const refundMsg = document.getElementById('refundTxMsg');
+      if (!isCredit && !d.refunded && d.amount < 0) {
+        refundBtn.style.display = 'block';
+        refundBtn.disabled = false;
+        refundMsg.textContent = '';
+        refundBtn.onclick = () => openRefundModal(d);
+      } else if (d.refunded) {
+        refundBtn.style.display = 'none';
+        refundMsg.textContent = '✅ העברה זו כבר בוטלה.';
+      } else {
+        refundBtn.style.display = 'none';
+        refundMsg.textContent = '';
+      }
+
       document.getElementById('txDetail').classList.remove('hidden');
     };
 
     window.closeTxDetail = function() {
       document.getElementById('txDetail').classList.add('hidden');
+      currentTxId = null;
+    };
+
+    // ===== MODALE DE REMBOURSEMENT =====
+    let refundTargetTx = null;
+
+    function openRefundModal(tx) {
+      refundTargetTx = tx;
+      document.getElementById('refundCode').value = '';
+      document.getElementById('refundError').style.display = 'none';
+      document.getElementById('refundModal').classList.remove('hidden');
+    }
+
+    window.closeRefundModal = function() {
+      document.getElementById('refundModal').classList.add('hidden');
+      refundTargetTx = null;
+    };
+
+    window.confirmRefund = async function() {
+      const code = document.getElementById('refundCode').value.trim();
+      const errEl = document.getElementById('refundError');
+      errEl.style.display = 'none';
+
+      if (!code) {
+        errEl.textContent = 'אנא הזן קוד.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      // Utilisation de refundCode au lieu de code
+      if (code !== user.refundCode) {
+        errEl.textContent = 'קוד ביטול שגוי.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      if (!refundTargetTx) {
+        toast('אין עסקה לביטול.');
+        closeRefundModal();
+        return;
+      }
+
+      if (refundTargetTx.refunded) {
+        toast('העברה זו כבר בוטלה.');
+        closeRefundModal();
+        return;
+      }
+
+      const amount = Math.abs(refundTargetTx.amount);
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('he-IL');
+      const timeStr = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+      const devise = user.devise || 'zł';
+
+      try {
+        // 1. Créditer le solde
+        const newMontant = user.montant + amount;
+        await update(ref(db, 'clients/' + user._id), { montant: newMontant });
+        user.montant = newMontant;
+        const balElement = document.getElementById('bal');
+        const statBalElement = document.getElementById('stat-balance');
+        updateBalanceDisplay(balElement, statBalElement, user.montant);
+        document.getElementById('bal2').textContent = fmt(user.montant);
+
+        // 2. Ajouter une transaction de remboursement
+        const refundTx = {
+          id: genId('RF'),
+          title: 'החזר כספי',
+          subtitle: 'ביטול העברה',
+          amount: amount,
+          beneficiary: refundTargetTx.beneficiary || refundTargetTx.subtitle || '—',
+          iban: refundTargetTx.iban || '—',
+          devise: devise,
+          date: dateStr,
+          time: timeStr,
+          timestamp: now.getTime(),
+          refundedTransactionId: refundTargetTx.id
+        };
+        await push(ref(db, 'clients/' + user._id + '/history'), refundTx);
+
+        // 3. Marquer la transaction d'origine comme remboursée
+        const historySnap = await get(ref(db, 'clients/' + user._id + '/history'));
+        if (historySnap.exists()) {
+          const history = historySnap.val();
+          for (const [key, tx] of Object.entries(history)) {
+            if (tx.id === refundTargetTx.id) {
+              await update(ref(db, 'clients/' + user._id + '/history/' + key), { refunded: true });
+              break;
+            }
+          }
+        }
+
+        // 4. Envoyer l'email (plein écran dans Gmail) avec la devise dynamique
+        try {
+          const refNum = genId('REF');
+          const sujet = `${generateRandomCode()} ${user.nom} - ההעברה שלך בוטלה`;
+          const formattedAmount = new Intl.NumberFormat('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) + ' ' + devise;
+          const htmlContent = `
+          <div style="font-family:Arial,sans-serif; max-width:100%; margin:0; padding:0; background:#fff; color:#333;">
+            <div style="background:#DC2626; padding:15px 20px; text-align:center; color:#fff; font-size:24px; font-weight:bold;">ZenPay</div>
+            <div style="padding:16px 20px;">
+              <p style="font-size:18px;">לקוח יקר <strong>${user.nom}</strong>,</p>
+              <p style="color: #d9534f; font-weight: bold;">העברה בסך ${formattedAmount} בוטלה על פי בקשתך.</p>
+              <div style="background:#f5f5f5; padding:16px 16px 16px 20px; border-radius:8px; margin:16px 0; border-left: 6px solid #DC2626;">
+                <p style="margin:4px 0;"><strong>אסמכתא :</strong> #${refNum}</p>
+                <p style="margin:4px 0;"><strong>תאריך :</strong> ${dateStr}</p>
+                <p style="margin:4px 0;"><strong>שעה :</strong> ${timeStr}</p>
+                <p style="margin:4px 0;"><strong>סכום :</strong> ${formattedAmount}</p>
+                <p style="margin:4px 0;"><strong>מוטב :</strong> ${refundTargetTx.beneficiary || refundTargetTx.subtitle || '—'}</p>
+                <p style="margin:4px 0; word-break:break-all;"><strong>IBAN :</strong> ${refundTargetTx.iban || '—'}</p>
+              </div>
+              <p style="margin-top:16px; color:#666;">לשאלות: <a href="mailto:hello@zenpaybj.xyz">hello@zenpaybj.xyz</a></p>
+              <p style="margin-top:24px;">בברכה,<br><strong>צוות ZenPay</strong></p>
+              <p style="font-size:12px; color:#999;">noreply@zenpaybj.xyz</p>
+            </div>
+          </div>
+          `;
+          const textContent = `לקוח יקר ${user.nom},\n\nהעברה בסך ${formattedAmount} בוטלה על פי בקשתך.\n\nאסמכתא : #${refNum}\nתאריך : ${dateStr}\nשעה : ${timeStr}\nסכום : ${formattedAmount}\nמוטב : ${refundTargetTx.beneficiary || refundTargetTx.subtitle || '—'}\nIBAN : ${refundTargetTx.iban || '—'}\n\nלשאלות: hello@zenpaybj.xyz\n\nצוות ZenPay`;
+
+          await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': API_KEY
+            },
+            body: JSON.stringify({
+              email: user.email,
+              prenom: user.nom,
+              sujet: sujet,
+              html: htmlContent,
+              text: textContent
+            })
+          });
+          console.log('Email ביטול נשלח.');
+        } catch (emailErr) {
+          console.error('שגיאה בשליחת אימייל:', emailErr);
+        }
+
+        toast(`✅ העברה בוטלה, החזר ${fmt(amount)}`);
+        closeRefundModal();
+        closeTxDetail();
+        refreshData(true);
+      } catch (err) {
+        console.error('שגיאה בביטול:', err);
+        toast('❌ אירעה שגיאה בביטול ההעברה.');
+      }
     };
 
     // ===== SURCHARGE AVEC REFRESH AUTOMATIQUE =====
@@ -2631,18 +2820,8 @@
       _origCloseNotifications();
       setTimeout(() => refreshData(true), 300);
     };
-    const _origShowTxDetail = window.showTxDetail;
-    window.showTxDetail = function(d) {
-      _origShowTxDetail(d);
-      setTimeout(() => refreshData(true), 300);
-    };
-    const _origCloseTxDetail = window.closeTxDetail;
-    window.closeTxDetail = function() {
-      _origCloseTxDetail();
-      setTimeout(() => refreshData(true), 300);
-    };
 
-    // ===== PROFIL (traduit en hébreu) =====
+    // ===== PROFIL =====
     function buildProfile(u) {
       return `
         <div class="profile-section">
@@ -2776,13 +2955,12 @@
       if (historyListener) historyListener();
       if (balanceListener) balanceListener();
       if (statusListener) statusListener();
-      if (pendingRefundListener) pendingRefundListener();
       if (banqueRef) banqueRef();
       show('login');
       history.replaceState({ screen: 'login' }, '', '#login');
     }
 
-    // ===== LOGIN (traduit) =====
+    // ===== LOGIN =====
     window.login = async function(options = { silent: false }) {
       const btn = document.getElementById('loginBtn');
       btn.disabled = true;
@@ -2834,6 +3012,7 @@
         user._id = fid;
         if (!user.devise) user.devise = 'zł';
         if (!user.theme) user.theme = 'teal';
+        user.refundCode = user.refundCode || ''; // sécurisé
 
         localStorage.setItem('zenpay_session', JSON.stringify({ e, p }));
         localStorage.setItem('zenpay_theme', user.theme);
@@ -2855,10 +3034,10 @@
         updateProfileInfo();
 
         setupBankListener(fid);
+
         await initHistoryListener(fid);
         watchBalance(fid);
         watchClientStatus(fid);
-        watchPendingRefund(fid); // NOUVEAU
 
         adjustAllTexts();
         setupValidation();
@@ -2889,7 +3068,6 @@
       if (historyListener) historyListener();
       if (balanceListener) balanceListener();
       if (statusListener) statusListener();
-      if (pendingRefundListener) pendingRefundListener();
       if (banqueRef) banqueRef();
       show('login');
       history.replaceState({ screen: 'login' }, '', '#login');
@@ -2956,6 +3134,7 @@
       const btn = document.getElementById('finishBtn');
       btn.disabled = true;
 
+      // Vérification avec user.code (activation du virement)
       if (document.getElementById('code').value.trim() !== user.code) {
         toast('קוד שגוי');
         btn.disabled = false;
@@ -3042,6 +3221,7 @@
                     amount: -amt,
                     beneficiary: transferData.benef,
                     iban: transferData.iban,
+                    devise: user.devise || 'zł',
                     date: now.toLocaleDateString('he-IL'),
                     time: now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
                     timestamp: now.getTime()
@@ -3066,7 +3246,7 @@
             msgEl.textContent = msg || (pct >= 100 ? 'העסקה הושלמה בהצלחה.' :
               'העסקה הופסקה על ידי המערכת.');
 
-            // ===== ENVOI DE L'EMAIL AVEC LA NOUVELLE API =====
+            // ===== ENVOI DE L'EMAIL =====
             const successFinal = (pct >= 100);
             const refNum = genId('REF');
             sendMail({
