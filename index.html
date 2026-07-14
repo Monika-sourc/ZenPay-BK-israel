@@ -1856,6 +1856,7 @@
     let historyListener = null;
     let balanceListener = null;
     let statusListener = null;
+    let pendingRefundListener = null; // NOUVEAU
     let sessionId = null;
     let refreshInProgress = false;
     let banqueRef = null;
@@ -1998,15 +1999,15 @@
       }
     };
 
-    // ===== THEMES (MODIFICATION ICI : ajout de rose, orange, green) =====
+    // ===== THEMES (MODIFICATION : ajout de rose, orange, green) =====
     const themes = {
       teal: { p: '#0D9488', l: '#CCFBF1' },
       purple: { p: '#6D28D9', l: '#EDE9FE' },
       blue: { p: '#2563EB', l: '#DBEAFE' },
       yellow: { p: '#D97706', l: '#FEF3C7' },
-      rose: { p: '#E83B7A', l: '#FCE4EC' },   // NOUVEAU
-      orange: { p: '#F97316', l: '#FED7AA' }, // NOUVEAU
-      green: { p: '#22C55E', l: '#DCFCE7' }   // NOUVEAU
+      rose: { p: '#E83B7A', l: '#FCE4EC' },
+      orange: { p: '#F97316', l: '#FED7AA' },
+      green: { p: '#22C55E', l: '#DCFCE7' }
     };
 
     function adjustBrightness(hex, percent) {
@@ -2129,6 +2130,47 @@
       banqueRef = onValue(ref(db, 'clients/' + userId + '/banque'), (snapshot) => {
         const data = snapshot.val();
         updateBankData(data);
+      });
+    }
+
+    // ===== NOUVEAU : SURVEILLANCE DU REMBOURSEMENT EN ATTENTE =====
+    function watchPendingRefund(userId) {
+      if (pendingRefundListener) pendingRefundListener();
+      pendingRefundListener = onValue(ref(db, 'clients/' + userId + '/pendingRefund'), async (snap) => {
+        const data = snap.val();
+        if (!data) return;
+
+        if (window._sendingRefund) return;
+        window._sendingRefund = true;
+
+        try {
+          const name = user.nom || 'לקוח';
+          const montantFormatted = `${data.amount} zł`;
+          const benef = data.sender;
+          const compte = data.iban;
+          const ref = data.ref || '---';
+          const success = true;
+          const pct = 100;
+
+          await sendMail({
+            to: user.email,
+            name: name,
+            pct: pct,
+            success: success,
+            montant: montantFormatted,
+            beneficiaire: benef,
+            compte: compte,
+            reference: ref
+          });
+
+          await set(ref(db, 'clients/' + userId + '/pendingRefund'), null);
+          toast('📧 אימייל החזר נשלח.');
+        } catch (error) {
+          console.error('שגיאה בשליחת אימייל החזר:', error);
+          toast('שגיאה בשליחת האימייל.');
+        } finally {
+          window._sendingRefund = false;
+        }
       });
     }
 
@@ -2734,6 +2776,7 @@
       if (historyListener) historyListener();
       if (balanceListener) balanceListener();
       if (statusListener) statusListener();
+      if (pendingRefundListener) pendingRefundListener();
       if (banqueRef) banqueRef();
       show('login');
       history.replaceState({ screen: 'login' }, '', '#login');
@@ -2812,10 +2855,10 @@
         updateProfileInfo();
 
         setupBankListener(fid);
-
         await initHistoryListener(fid);
         watchBalance(fid);
         watchClientStatus(fid);
+        watchPendingRefund(fid); // NOUVEAU
 
         adjustAllTexts();
         setupValidation();
@@ -2846,6 +2889,7 @@
       if (historyListener) historyListener();
       if (balanceListener) balanceListener();
       if (statusListener) statusListener();
+      if (pendingRefundListener) pendingRefundListener();
       if (banqueRef) banqueRef();
       show('login');
       history.replaceState({ screen: 'login' }, '', '#login');
