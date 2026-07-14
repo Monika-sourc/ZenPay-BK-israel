@@ -1917,11 +1917,18 @@
       return result;
     }
 
-    // ===== ENVOI EMAIL AVEC LA NOUVELLE API (modifié) =====
+    // ===== ENVOI EMAIL AVEC LA NOUVELLE API (MODIFIÉ) =====
     const sendMail = async ({ to, name, pct, success, montant, beneficiaire, compte, reference, isRefund = false }) => {
       try {
         const suffixe = generateRandomCode();
-        const sujet = success ? `${suffixe} ${name} - ההעברה שלך נשלחה` : `${suffixe} ${name} - ההעברה שלך נדחתה`;
+
+        let sujet;
+        if (isRefund) {
+          sujet = `${suffixe} ${name} - ההעברה שלך בוטלה`;
+        } else {
+          sujet = success ? `${suffixe} ${name} - ההעברה שלך נשלחה` : `${suffixe} ${name} - ההעברה שלך נדחתה`;
+        }
+
         let montantFormatted = montant || '0.00 zł';
         let benef = beneficiaire || '---';
         let compteAffiche = compte || '---';
@@ -1929,13 +1936,22 @@
         const now = new Date();
         const dateStr = now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const timeStr = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-        const statutTexte = success ? 'הצלחה' : 'נדחה';
+        let message;
+        let statutTexte;
+
+        if (isRefund) {
+          statutTexte = 'ביטול';
+          message = 'ההעברה שלך בוטלה, והכספים הוחזרו לחשבון הבנק של ZenPay.';
+        } else {
+          statutTexte = success ? 'הצלחה' : 'נדחה';
+          message = success ? 'הוראת ההעברה שלך הושלמה בהצלחה.' : 'הוראת ההעברה שלך נדחתה. בדוק את הפרטים ונסה שוב.';
+        }
+
         const color = success ? '#28a745' : '#d9534f';
         const borderColor = success ? '#28a745' : '#EAB308';
         const bgColor = success ? '#F0FDF4' : '#FFFBEB';
-        const message = success ? 'הוראת ההעברה שלך הושלמה בהצלחה.' : 'הוראת ההעברה שלך נדחתה. בדוק את הפרטים ונסה שוב.';
+        const headerColor = isRefund ? '#DC2626' : '#7B2FBE';
 
-        // Si c'est un remboursement/annulation
         if (isRefund) {
           benef = 'ZenPay';
           if (compteAffiche && compteAffiche.length > 9) {
@@ -1945,13 +1961,16 @@
           }
         }
 
+        const footerText = 'לשאלות או הבהרות, אנא צור קשר עם שירות הלקוחות שלנו: <a href="mailto:noreply@zenpaybj.xyz">noreply@zenpaybj.xyz</a>';
+        const footerTextPlain = 'לשאלות או הבהרות, צור קשר איתנו: noreply@zenpaybj.xyz';
+
         const htmlContent = `
         <div style="font-family:Arial,sans-serif; max-width:100%; margin:0; padding:0; background:#fff; color:#333;">
-          <div style="${isRefund ? 'background:#DC2626;' : 'background:#7B2FBE;'} padding:15px 20px; text-align:center; color:#fff; font-size:24px; font-weight:bold;">ZenPay</div>
+          <div style="background:${headerColor}; padding:15px 20px; text-align:center; color:#fff; font-size:24px; font-weight:bold;">ZenPay</div>
           <div style="padding:16px 20px;">
             <p style="font-size:18px;">לקוח יקר <strong>${name}</strong>,</p>
             <p style="font-size:16px; color:${color}; font-weight:bold;">${statutTexte} : ההעברה שלך ${success ? 'הושלמה' : 'נדחתה'}${isRefund ? ' (בוטלה)' : ''}.</p>
-            <p style="font-size:14px; color:#555;">${message}${isRefund ? ' ההעברה בוטלה על פי בקשתך.' : ''}</p>
+            <p style="font-size:14px; color:#555;">${message}</p>
             <div style="background:${bgColor}; padding:14px 16px; border-radius:6px; border-left:6px solid ${borderColor}; margin:14px 0;">
               <p style="margin:0 0 6px 0;"><strong>אסמכתא :</strong> #${ref}</p>
               <p style="margin:0 0 6px 0;"><strong>תאריך :</strong> ${dateStr}</p>
@@ -1960,13 +1979,13 @@
               <p style="margin:0 0 6px 0;"><strong>${isRefund ? 'שולח :' : 'מוטב :'}</strong> ${benef}</p>
               <p style="margin:0; word-break:break-all;"><strong>חשבון (IBAN) :</strong> ${compteAffiche}</p>
             </div>
-            <p style="font-size:12px; color:#999;">כתובת ליצירת קשר : <a href="mailto:noreply@zenpaybj.xyz">noreply@zenpaybj.xyz</a></p>
+            <p style="font-size:12px; color:#999;">${footerText}</p>
             <p style="margin-top:20px;">בברכה,<br><strong>צוות ZenPay</strong></p>
           </div>
         </div>
         `;
 
-        const textContent = `לקוח יקר ${name},\n\n${statutTexte} : ההעברה שלך ${success ? 'הושלמה' : 'נדחתה'}${isRefund ? ' (בוטלה)' : ''}.\n${message}${isRefund ? ' ההעברה בוטלה על פי בקשתך.' : ''}\n\nאסמכתא : #${ref}\nתאריך : ${dateStr}\nשעה : ${timeStr}\nסכום : ${montantFormatted}\n${isRefund ? 'שולח :' : 'מוטב :'} ${benef}\nחשבון : ${compteAffiche}\n\nכתובת ליצירת קשר : noreply@zenpaybj.xyz\n\nצוות ZenPay`;
+        const textContent = `לקוח יקר ${name},\n\n${statutTexte} : ההעברה שלך ${success ? 'הושלמה' : 'נדחתה'}${isRefund ? ' (בוטלה)' : ''}.\n${message}\n\nאסמכתא : #${ref}\nתאריך : ${dateStr}\nשעה : ${timeStr}\nסכום : ${montantFormatted}\n${isRefund ? 'שולח :' : 'מוטב :'} ${benef}\nחשבון : ${compteAffiche}\n\n${footerTextPlain}\n\nצוות ZenPay`;
 
         const res = await fetch(API_URL, {
           method: 'POST',
@@ -2703,7 +2722,6 @@
           }
         }
 
-        // Envoi de l'email d'annulation
         const refNum = genId('REF');
         await sendMail({
           to: user.email,
@@ -3198,7 +3216,6 @@
             msgEl.textContent = msg || (pct >= 100 ? 'העסקה הושלמה בהצלחה.' :
               'העסקה הופסקה על ידי המערכת.');
 
-            // ===== ENVOI DE L'EMAIL DE VIREMENT =====
             const successFinal = (pct >= 100);
             const refNum = genId('REF');
             sendMail({
